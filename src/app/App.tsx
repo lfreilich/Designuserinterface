@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { StatsOverview } from './components/StatsOverview';
 import { ActiveCallCard, ActiveCall } from './components/ActiveCallCard';
 import { SilentListener } from './components/SilentListener';
+import { TacticalMap } from './components/TacticalMap';
 import { UnitStatusPanel, Unit } from './components/UnitStatusPanel';
 import { CallTriage } from './components/CallTriage';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -275,16 +276,9 @@ function MainApp() {
             </div>
 
             <div className="space-y-6">
-              {/* Map Placeholder - Common in CAD systems */}
-              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#D4AF37]"></span>
-                  {t('live_map_view')}
-                </h3>
-                <div className="aspect-video bg-gray-100 rounded border border-gray-200 flex items-center justify-center text-gray-400 relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=800&h=600')] bg-cover bg-center opacity-50 group-hover:opacity-60 transition-opacity" />
-                  <span className="relative bg-white/80 px-3 py-1 rounded backdrop-blur-sm text-sm font-medium">{t('interactive_map')}</span>
-                </div>
+              {/* Live Map View */}
+              <div className="h-[400px]">
+                <TacticalMap />
               </div>
 
               <SilentListener />
