@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { DispatchHeader } from './components/DispatchHeader';
 import { Sidebar } from './components/Sidebar';
 import { StatsOverview } from './components/StatsOverview';
 import { ActiveCallCard, ActiveCall } from './components/ActiveCallCard';
 import { SilentListener } from './components/SilentListener';
+import { TacticalMap } from './components/TacticalMap';
 import { UnitStatusPanel, Unit } from './components/UnitStatusPanel';
 import { CallTriage } from './components/CallTriage';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -12,99 +13,8 @@ import { Input } from './components/ui/input';
 import { Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Toaster } from './components/ui/sonner';
-
-// Mock data
-const initialCalls: ActiveCall[] = [
-  {
-    id: '1',
-    address: 'Nahar Hayarden 45, RBS Alef',
-    type: 'Medical Emergency',
-    priority: 'critical',
-    caller: 'Moshe Cohen',
-    phone: '054-123-4567',
-    time: '14:23',
-    units: ['Unit 1', 'Unit 3'],
-    status: 'en-route',
-    eta: '3 min',
-  },
-  {
-    id: '2',
-    address: 'Sorek 12, RBS Gimmel',
-    type: 'Cardiac Arrest',
-    priority: 'critical',
-    caller: 'Sarah Levy',
-    phone: '052-987-6543',
-    time: '14:18',
-    units: ['Unit 2'],
-    status: 'on-scene',
-  },
-  {
-    id: '3',
-    address: 'Dolev 8, RBS Bet',
-    type: 'Trauma',
-    priority: 'high',
-    caller: 'David Goldstein',
-    phone: '053-456-7890',
-    time: '14:15',
-    units: [],
-    status: 'pending',
-  },
-  {
-    id: '4',
-    address: 'Lachish 23, Ramat Beit Shemesh',
-    type: 'Pediatric Emergency',
-    priority: 'medium',
-    caller: 'Rachel Green',
-    phone: '050-234-5678',
-    time: '14:10',
-    units: ['Unit 5'],
-    status: 'dispatched',
-    eta: '5 min',
-  },
-];
-
-const initialUnits: Unit[] = [
-  {
-    id: 'u1',
-    name: 'Unit 1',
-    status: 'dispatched',
-    location: 'Nahar Hayarden',
-    members: ['Yossi K.', 'Eli M.'],
-  },
-  {
-    id: 'u2',
-    name: 'Unit 2',
-    status: 'busy',
-    location: 'Sorek',
-    members: ['David L.', 'Chaim S.'],
-  },
-  {
-    id: 'u3',
-    name: 'Unit 3',
-    status: 'dispatched',
-    location: 'Nahar Hayarden',
-    members: ['Moshe R.'],
-  },
-  {
-    id: 'u4',
-    name: 'Unit 4',
-    status: 'available',
-    members: ['Avi C.', 'Shlomo G.'],
-  },
-  {
-    id: 'u5',
-    name: 'Unit 5',
-    status: 'dispatched',
-    location: 'Lachish',
-    members: ['Yakov B.'],
-  },
-  {
-    id: 'u6',
-    name: 'Unit 6',
-    status: 'available',
-    members: ['Meir D.', 'Yisroel F.'],
-  },
-];
+import { CallDetailsDialog } from './components/CallDetailsDialog';
+import * as api from './services/api';
 
 export default function App() {
   return (
@@ -116,31 +26,104 @@ export default function App() {
 
 function MainApp() {
   const { t, language } = useLanguage();
-  const [calls, setCalls] = useState<ActiveCall[]>(initialCalls);
-  const [units] = useState<Unit[]>(initialUnits);
+  const [calls, setCalls] = useState<ActiveCall[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [selectedCall, setSelectedCall] = useState<ActiveCall | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
-  const handleNewCall = (newCall: ActiveCall) => {
-    setCalls([newCall, ...calls]);
-    toast.success('New emergency call created', {
-      description: `${newCall.type} at ${newCall.address}`,
+  // Load Data
+  useEffect(() => {
+    async function fetchData() {
+      const [incidents, resources] = await Promise.all([
+        api.getIncidents(),
+        api.getResources()
+      ]);
+
+      // Transform backend data to frontend model
+      const mappedCalls: ActiveCall[] = incidents.map(inc => ({
+        id: inc._id,
+        address: inc.addressFormatted,
+        type: inc.chiefComplaintText,
+        priority: inc.priority === 1 ? 'critical' : inc.priority === 2 ? 'high' : 'medium',
+        caller: inc.callerName,
+        phone: inc.callerPhone,
+        time: new Date(inc.timeCallReceived).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        units: inc.unitsAssigned.map(uid => {
+          const u = resources.find(r => r._id === uid);
+          return u ? u.name : uid;
+        }),
+        status: inc.status === 'open' ? 'pending' : inc.status === 'dispatched' ? 'dispatched' : 'active' as any,
+        eta: '5 min' // Mock ETA
+      }));
+
+      const mappedUnits: Unit[] = resources.map(res => ({
+        id: res._id,
+        name: res.name,
+        status: res.status as any,
+        location: res.location ? `${res.location.coordinates[1]}, ${res.location.coordinates[0]}` : 'Unknown',
+        members: res.crewMembers || []
+      }));
+
+      setCalls(mappedCalls);
+      setUnits(mappedUnits);
+      setLoading(false);
+    }
+    
+    fetchData();
+    // Poll for updates (simulate real-time)
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleNewCall = async (newCallData: ActiveCall) => {
+    // Optimistic Update
+    setCalls([newCallData, ...calls]);
+    
+    // Send to backend
+    const incident = await api.createIncident({
+      type: newCallData.type,
+      priority: newCallData.priority === 'critical' ? 1 : 2,
+      address: newCallData.address,
+      caller: newCallData.caller,
+      phone: newCallData.phone,
+      notes: ''
     });
+
+    if (incident) {
+      toast.success('New emergency call created', {
+        description: `${incident.chiefComplaintText} at ${incident.addressFormatted}`,
+      });
+    } else {
+       toast.error('Failed to create incident on server');
+    }
   };
 
-  const handleDispatch = (callId: string) => {
-    setCalls(calls.map(call => 
-      call.id === callId 
-        ? { ...call, status: 'dispatched' as const, units: ['Unit 4'] }
-        : call
-    ));
-    toast.success('Unit dispatched successfully');
+  const handleDispatch = async (callId: string) => {
+    // Find available unit (simple logic for demo)
+    const availableUnit = units.find(u => u.status === 'available');
+    if (availableUnit) {
+      const success = await api.dispatchUnit(callId, availableUnit.id);
+      if (success) {
+        toast.success(`Unit ${availableUnit.name} dispatched successfully`);
+        // State will update on next poll or manual update
+        setCalls(calls.map(c => c.id === callId ? { ...c, status: 'dispatched', units: [...c.units, availableUnit.name] } : c));
+        setUnits(units.map(u => u.id === availableUnit.id ? { ...u, status: 'dispatched' } : u));
+      } else {
+        toast.error('Dispatch failed');
+      }
+    } else {
+      toast.error('No available units');
+    }
   };
 
   const handleViewDetails = (callId: string) => {
     const call = calls.find(c => c.id === callId);
-    toast.info('Call Details', {
-      description: `${call?.type} - ${call?.address}`,
-    });
+    if (call) {
+      setSelectedCall(call);
+      setShowDetails(true);
+    }
   };
 
   const filteredCalls = calls.filter(call =>
@@ -223,7 +206,9 @@ function MainApp() {
                 </TabsList>
                 
                 <TabsContent value="all" className="space-y-3 mt-4">
-                  {filteredCalls.length === 0 ? (
+                  {loading ? (
+                     <div className="p-8 text-center text-gray-400">Loading incidents from server...</div>
+                  ) : filteredCalls.length === 0 ? (
                     <div className="text-center py-12 bg-white rounded-lg border border-dashed border-gray-200">
                       <p className="text-muted-foreground">No calls found matching your criteria</p>
                     </div>
@@ -275,16 +260,9 @@ function MainApp() {
             </div>
 
             <div className="space-y-6">
-              {/* Map Placeholder - Common in CAD systems */}
-              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#D4AF37]"></span>
-                  {t('live_map_view')}
-                </h3>
-                <div className="aspect-video bg-gray-100 rounded border border-gray-200 flex items-center justify-center text-gray-400 relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=800&h=600')] bg-cover bg-center opacity-50 group-hover:opacity-60 transition-opacity" />
-                  <span className="relative bg-white/80 px-3 py-1 rounded backdrop-blur-sm text-sm font-medium">{t('interactive_map')}</span>
-                </div>
+              {/* Live Map View */}
+              <div className="h-[400px]">
+                <TacticalMap incidents={activeCalls} units={units} />
               </div>
 
               <SilentListener />
@@ -293,6 +271,12 @@ function MainApp() {
           </div>
         </main>
       </div>
+
+      <CallDetailsDialog 
+        open={showDetails} 
+        call={selectedCall} 
+        onClose={() => setShowDetails(false)} 
+      />
 
       <Toaster />
     </div>

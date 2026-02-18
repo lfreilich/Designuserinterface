@@ -13,8 +13,9 @@ export interface ActiveCall {
   phone: string;
   time: string;
   units: string[];
-  status: 'pending' | 'dispatched' | 'en-route' | 'on-scene';
+  status: 'pending' | 'dispatched' | 'en-route' | 'on-scene' | 'transporting' | 'completed';
   eta?: string;
+  location?: { lat: number; lng: number }; // Added for Map
 }
 
 interface ActiveCallCardProps {
@@ -35,11 +36,13 @@ const statusConfig = {
   dispatched: { color: 'bg-[#D4AF37]', text: 'DISPATCHED' },
   'en-route': { color: 'bg-[#1E4A9C]', text: 'EN ROUTE' },
   'on-scene': { color: 'bg-green-600', text: 'ON SCENE' },
+  'transporting': { color: 'bg-purple-600', text: 'TRANSPORTING' },
+  'completed': { color: 'bg-gray-800', text: 'COMPLETED' },
 };
 
 export function ActiveCallCard({ call, onDispatch, onView }: ActiveCallCardProps) {
-  const config = priorityConfig[call.priority];
-  const status = statusConfig[call.status];
+  const config = priorityConfig[call.priority] || priorityConfig.medium;
+  const status = statusConfig[call.status] || statusConfig.pending;
 
   return (
     <Card className={`overflow-hidden border-l-[6px] shadow-sm hover:shadow-md transition-all group ${config.border}`}>
@@ -50,7 +53,7 @@ export function ActiveCallCard({ call, onDispatch, onView }: ActiveCallCardProps
             <Badge className={`${config.color} text-white hover:${config.color} font-bold tracking-wider`}>
               {config.text}
             </Badge>
-            <span className="text-xs font-mono text-muted-foreground">#{call.id}</span>
+            <span className="text-xs font-mono text-muted-foreground">#{call.id.slice(-6)}</span>
           </div>
           <div className="flex items-center gap-1.5 text-sm font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
             <Clock className="h-3.5 w-3.5" />

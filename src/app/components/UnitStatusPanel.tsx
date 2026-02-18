@@ -7,8 +7,9 @@ import { Separator } from './ui/separator';
 export interface Unit {
   id: string;
   name: string;
-  status: 'available' | 'dispatched' | 'busy' | 'offline';
+  status: 'available' | 'dispatched' | 'busy' | 'offline' | 'responding' | 'on scene' | 'transporting' | 'at hospital' | 'unavailable' | 'off duty';
   location?: string;
+  coordinates?: { lat: number; lng: number }; // Added for Map
   members: string[];
   lastUpdate?: string;
 }
@@ -17,17 +18,23 @@ interface UnitStatusPanelProps {
   units: Unit[];
 }
 
-const statusConfig = {
+const statusConfig: Record<string, { color: string, text: string, bg: string, border: string }> = {
   available: { color: 'bg-green-500', text: 'Available', bg: 'bg-green-50', border: 'border-green-200' },
   dispatched: { color: 'bg-[#D4AF37]', text: 'Dispatched', bg: 'bg-yellow-50', border: 'border-yellow-200' },
   busy: { color: 'bg-[#DC1E2E]', text: 'Busy', bg: 'bg-red-50', border: 'border-red-200' },
   offline: { color: 'bg-gray-400', text: 'Offline', bg: 'bg-gray-50', border: 'border-gray-200' },
+  responding: { color: 'bg-[#1E4A9C]', text: 'Responding', bg: 'bg-blue-50', border: 'border-blue-200' },
+  'on scene': { color: 'bg-green-600', text: 'On Scene', bg: 'bg-green-100', border: 'border-green-300' },
+  transporting: { color: 'bg-purple-600', text: 'Transporting', bg: 'bg-purple-50', border: 'border-purple-200' },
+  'at hospital': { color: 'bg-teal-600', text: 'At Hospital', bg: 'bg-teal-50', border: 'border-teal-200' },
+  unavailable: { color: 'bg-gray-500', text: 'Unavailable', bg: 'bg-gray-100', border: 'border-gray-300' },
+  'off duty': { color: 'bg-gray-400', text: 'Off Duty', bg: 'bg-gray-50', border: 'border-gray-200' },
 };
 
 export function UnitStatusPanel({ units }: UnitStatusPanelProps) {
   const availableCount = units.filter(u => u.status === 'available').length;
-  const dispatchedCount = units.filter(u => u.status === 'dispatched').length;
-  const busyCount = units.filter(u => u.status === 'busy').length;
+  const dispatchedCount = units.filter(u => ['dispatched', 'responding', 'transporting'].includes(u.status)).length;
+  const busyCount = units.filter(u => ['busy', 'on scene', 'at hospital'].includes(u.status)).length;
 
   return (
     <div className="space-y-4 h-full flex flex-col">
@@ -38,7 +45,7 @@ export function UnitStatusPanel({ units }: UnitStatusPanelProps) {
           <span className="text-2xl font-bold text-green-600 mt-1">{availableCount}</span>
         </Card>
         <Card className="p-3 bg-white border border-yellow-100 shadow-sm flex flex-col items-center justify-center hover:border-yellow-300 transition-colors">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Dispatched</span>
+          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Active</span>
           <span className="text-2xl font-bold text-[#D4AF37] mt-1">{dispatchedCount}</span>
         </Card>
         <Card className="p-3 bg-white border border-red-100 shadow-sm flex flex-col items-center justify-center hover:border-red-300 transition-colors">
@@ -56,23 +63,23 @@ export function UnitStatusPanel({ units }: UnitStatusPanelProps) {
           </div>
           <span className="text-xs text-muted-foreground flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            Updated 1m ago
+            Live
           </span>
         </div>
         
         <ScrollArea className="flex-1 p-0">
           <div className="divide-y divide-gray-100">
             {units.map((unit) => {
-              const status = statusConfig[unit.status];
+              const status = statusConfig[unit.status] || statusConfig.unavailable;
               return (
                 <div 
                   key={unit.id} 
-                  className={`group p-4 hover:bg-gray-50 transition-colors cursor-pointer border-l-4 ${status.border.replace('border-', 'border-l-')}`}
+                  className={`group p-4 hover:bg-gray-50 transition-colors cursor-pointer border-l-4 ${status.border ? status.border.replace('border-', 'border-l-') : 'border-l-gray-300'}`}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-gray-900">{unit.name}</span>
-                      {unit.status === 'offline' ? (
+                      {unit.status === 'offline' || unit.status === 'off duty' ? (
                         <WifiOff className="h-3.5 w-3.5 text-gray-400" />
                       ) : (
                         <Wifi className="h-3.5 w-3.5 text-green-500" />

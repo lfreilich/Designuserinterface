@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -9,6 +9,7 @@ import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { Plus, Check, ChevronRight, ChevronLeft, AlertTriangle, User, MapPin, Phone, Stethoscope } from 'lucide-react';
 import { ActiveCall } from './ActiveCallCard';
+import * as api from '../services/api';
 
 interface CallTriageProps {
   onSubmit: (call: ActiveCall) => void;
@@ -32,10 +33,27 @@ export function CallTriage({ onSubmit }: CallTriageProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<TriageStep>('intake');
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
+  const [complaints, setComplaints] = useState<api.BackendChiefComplaint[]>([]);
+
+  useEffect(() => {
+    if (open) {
+      api.getChiefComplaints().then(setComplaints);
+    }
+  }, [open]);
 
   const calculatePriority = (): ActiveCall['priority'] => {
+    // Check specific medical triggers first
     if (formData.conscious === 'no' || formData.breathing === 'no' || formData.severity > 8) return 'critical';
     if (formData.bleeding === 'severe' || formData.severity > 6) return 'high';
+    
+    // Check chief complaint priority from DB
+    const selectedComplaint = complaints.find(c => c.name === formData.type);
+    if (selectedComplaint) {
+      if (selectedComplaint.priority === 1) return 'critical';
+      if (selectedComplaint.priority === 2) return 'high';
+      if (selectedComplaint.priority === 3) return 'medium';
+    }
+
     if (formData.severity > 3) return 'medium';
     return 'low';
   };
@@ -165,14 +183,16 @@ export function CallTriage({ onSubmit }: CallTriageProps) {
                   <SelectTrigger className="bg-gray-50">
                     <SelectValue placeholder="Select primary complaint" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Cardiac Arrest">Cardiac Arrest</SelectItem>
-                    <SelectItem value="Respiratory Distress">Respiratory Distress</SelectItem>
-                    <SelectItem value="Trauma">Trauma / Injury</SelectItem>
-                    <SelectItem value="Unconscious">Unconscious / Fainting</SelectItem>
-                    <SelectItem value="Pediatric">Pediatric Emergency</SelectItem>
-                    <SelectItem value="MVA">Car Accident</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                  <SelectContent className="max-h-[300px]">
+                    {complaints.length > 0 ? (
+                      complaints.map((c) => (
+                        <SelectItem key={c._id} value={c.name}>
+                          {c.code} - {c.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="loading" disabled>Loading...</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
