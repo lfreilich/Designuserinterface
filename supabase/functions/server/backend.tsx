@@ -38,9 +38,10 @@ export interface Incident {
   callerName: string;
   callerPhone: string;
   timeCallReceived: string; // ISO date
-  unitsAssigned: string[]; // Array of Resource IDs (simplified from schema)
+  unitsAssigned: string[]; // Array of Resource IDs
   notes?: string;
   callType: string;
+  pcrId?: string; // Link to PCR
 }
 
 export interface Resource {
@@ -84,19 +85,90 @@ export interface IncidentNote {
   userName: string;
 }
 
+// PCR Types
+export interface IncidentPCR {
+  _id: string;
+  incidentId: string;
+  status: 'active' | 'submitted';
+  patientFirstName?: string;
+  patientLastName?: string;
+  patientAge?: string;
+  patientGender?: string;
+  chiefComplaintText?: string;
+  history?: string;
+  allergies?: string;
+  medications?: string;
+  clinicalImpression?: string;
+  triageCategory?: string;
+  outcome?: string;
+  transportDestination?: string;
+  submittedAt?: string;
+  submittedBy?: string;
+  createdAt: string;
+}
+
+export interface PCRObservation {
+  _id: string;
+  pcrId: string;
+  timestamp: string;
+  heartRate?: number;
+  bloodPressureSystolic?: number;
+  bloodPressureDiastolic?: number;
+  respiratoryRate?: number;
+  spo2?: number;
+  gcsTotal?: number;
+  notes?: string;
+}
+
+export interface PCRTreatment {
+  _id: string;
+  pcrId: string;
+  treatmentName: string;
+  dose?: string;
+  route?: string;
+  timestamp: string;
+  outcome?: string;
+}
+
 // --- Initial Data (Seeding) ---
 
 const initialChiefComplaints: ChiefComplaint[] = [
-  { _id: 'cc1', name: 'Cardiac Arrest', code: '09', category: 'Cardiovascular', priority: 1 },
-  { _id: 'cc2', name: 'Chest Pain', code: '10', category: 'Cardiovascular', priority: 2 },
-  { _id: 'cc3', name: 'Difficulty Breathing', code: '06', category: 'Respiratory', priority: 1 },
-  { _id: 'cc4', name: 'Trauma / Injury', code: '30', category: 'Trauma', priority: 2 },
-  { _id: 'cc5', name: 'Unconscious / Fainting', code: '31', category: 'Neurological', priority: 1 },
-  { _id: 'cc6', name: 'Seizure', code: '12', category: 'Neurological', priority: 2 },
-  { _id: 'cc7', name: 'Allergic Reaction', code: '02', category: 'Immune', priority: 2 },
-  { _id: 'cc8', name: 'Abdominal Pain', code: '01', category: 'Gastrointestinal', priority: 3 },
-  { _id: 'cc9', name: 'MVA', code: '29', category: 'Trauma', priority: 2 },
-  { _id: 'cc10', name: 'Sick Person', code: '26', category: 'General', priority: 3 },
+  { _id: 'cc1', name: 'Abdominal Pain', code: '01', category: 'Gastrointestinal', priority: 3 },
+  { _id: 'cc2', name: 'Allergies / Envenomations', code: '02', category: 'Immune', priority: 2 },
+  { _id: 'cc3', name: 'Animal Bites / Attacks', code: '03', category: 'Trauma', priority: 3 },
+  { _id: 'cc4', name: 'Assault / Sexual Assault', code: '04', category: 'Trauma', priority: 2 },
+  { _id: 'cc5', name: 'Back Pain (Non-Traumatic)', code: '05', category: 'General', priority: 3 },
+  { _id: 'cc6', name: 'Breathing Problems', code: '06', category: 'Respiratory', priority: 1 },
+  { _id: 'cc7', name: 'Burns / Explosion', code: '07', category: 'Trauma', priority: 2 },
+  { _id: 'cc8', name: 'Carbon Monoxide / Hazmat', code: '08', category: 'Environmental', priority: 1 },
+  { _id: 'cc9', name: 'Cardiac Arrest / Death', code: '09', category: 'Cardiovascular', priority: 1 },
+  { _id: 'cc10', name: 'Chest Pain (Non-Traumatic)', code: '10', category: 'Cardiovascular', priority: 1 },
+  { _id: 'cc11', name: 'Choking', code: '11', category: 'Respiratory', priority: 1 },
+  { _id: 'cc12', name: 'Convulsions / Seizures', code: '12', category: 'Neurological', priority: 1 },
+  { _id: 'cc13', name: 'Diabetic Problems', code: '13', category: 'Endocrine', priority: 2 },
+  { _id: 'cc14', name: 'Drowning / Diving', code: '14', category: 'Environmental', priority: 1 },
+  { _id: 'cc15', name: 'Electrocution / Lightning', code: '15', category: 'Trauma', priority: 1 },
+  { _id: 'cc16', name: 'Eye Problems / Injuries', code: '16', category: 'Trauma', priority: 3 },
+  { _id: 'cc17', name: 'Falls', code: '17', category: 'Trauma', priority: 2 },
+  { _id: 'cc18', name: 'Headache', code: '18', category: 'Neurological', priority: 3 },
+  { _id: 'cc19', name: 'Heart Problems / A.I.C.D.', code: '19', category: 'Cardiovascular', priority: 2 },
+  { _id: 'cc20', name: 'Heat / Cold Exposure', code: '20', category: 'Environmental', priority: 2 },
+  { _id: 'cc21', name: 'Hemorrhage / Lacerations', code: '21', category: 'Trauma', priority: 2 },
+  { _id: 'cc22', name: 'Inaccessible Incident', code: '22', category: 'General', priority: 3 },
+  { _id: 'cc23', name: 'Overdose / Poisoning', code: '23', category: 'Toxicology', priority: 1 },
+  { _id: 'cc24', name: 'Pregnancy / Childbirth', code: '24', category: 'Obstetric', priority: 1 },
+  { _id: 'cc25', name: 'Psychiatric / Suicide Attempt', code: '25', category: 'Psychiatric', priority: 2 },
+  { _id: 'cc26', name: 'Sick Person', code: '26', category: 'General', priority: 3 },
+  { _id: 'cc27', name: 'Stab / Gunshot / Penetrating', code: '27', category: 'Trauma', priority: 1 },
+  { _id: 'cc28', name: 'Stroke (CVA)', code: '28', category: 'Neurological', priority: 1 },
+  { _id: 'cc29', name: 'Traffic / Transportation (MVA)', code: '29', category: 'Trauma', priority: 1 },
+  { _id: 'cc30', name: 'Traumatic Injuries', code: '30', category: 'Trauma', priority: 2 },
+  { _id: 'cc31', name: 'Unconscious / Fainting', code: '31', category: 'Neurological', priority: 1 },
+  { _id: 'cc32', name: 'Unknown Problem (Man Down)', code: '32', category: 'General', priority: 2 },
+  { _id: 'cc33', name: 'Interfacility Transfer', code: '33', category: 'General', priority: 3 },
+  { _id: 'cc34', name: 'Standby / Event', code: '34', category: 'General', priority: 3 },
+  { _id: 'cc35', name: 'Test / Training', code: '35', category: 'Admin', priority: 9 },
+  { _id: 'cc36', name: 'Well Person Check', code: '36', category: 'General', priority: 3 },
 ];
 
 const initialHospitals: Hospital[] = [
@@ -265,6 +337,11 @@ async function getIncidentNotes(incidentId: string): Promise<IncidentNote[]> {
   }
 }
 
+async function getPCR(pcrId: string): Promise<IncidentPCR | null> {
+  const data = await kv.get(`pcr:${pcrId}`);
+  return data as IncidentPCR | null;
+}
+
 // --- API Routes ---
 
 app.get('/incidents', async (c) => {
@@ -341,6 +418,9 @@ app.post('/dispatch', async (c) => {
       await kv.set('incidents', incidents);
       await kv.set('resources', resources);
       
+      // Log notification (Simulation of incidentNotifier.js)
+      console.log(`Notification: Unit ${unit.callSign} dispatched to ${incident.caseNumber}`);
+      
       return c.json({ success: true, incident, unit });
     }
     
@@ -388,16 +468,204 @@ app.post('/incidents/:id/notes', async (c) => {
   return c.json(newNote);
 });
 
+// PCR Routes
+app.post('/pcrs', async (c) => {
+  try {
+    const body = await c.req.json();
+    const newPCR: IncidentPCR = {
+      _id: Math.random().toString(36).substr(2, 9),
+      incidentId: body.incidentId,
+      status: 'active',
+      patientFirstName: body.patientFirstName,
+      patientLastName: body.patientLastName,
+      createdAt: new Date().toISOString()
+    };
+    
+    await kv.set(`pcr:${newPCR._id}`, newPCR);
+    
+    // Link to incident
+    const incidents = await getIncidents();
+    const incidentIndex = incidents.findIndex(i => i._id === body.incidentId);
+    if (incidentIndex !== -1) {
+      incidents[incidentIndex].pcrId = newPCR._id;
+      await kv.set('incidents', incidents);
+    }
+    
+    return c.json(newPCR);
+  } catch (e) {
+    return c.json({ error: 'Failed to create PCR' }, 500);
+  }
+});
+
+app.get('/pcrs/:id', async (c) => {
+  const { id } = c.req.param();
+  const pcr = await getPCR(id);
+  if (!pcr) return c.json({ error: 'PCR not found' }, 404);
+  
+  // Get linked data (mocked mostly for this demo as we don't have full relational DB)
+  const observations = (await kv.get(`pcr:${id}:obs`)) || [];
+  const treatments = (await kv.get(`pcr:${id}:tx`)) || [];
+  
+  return c.json({ pcr, observations, treatments });
+});
+
+app.put('/pcrs/:id', async (c) => {
+  const { id } = c.req.param();
+  const body = await c.req.json();
+  const pcr = await getPCR(id);
+  if (!pcr) return c.json({ error: 'PCR not found' }, 404);
+  
+  const updatedPCR = { ...pcr, ...body };
+  await kv.set(`pcr:${id}`, updatedPCR);
+  return c.json(updatedPCR);
+});
+
+// Generate PDF Report (HTML representation)
+app.get('/pcrs/:id/pdf', async (c) => {
+  const { id } = c.req.param();
+  const pcr = await getPCR(id);
+  if (!pcr) return c.text('PCR Not Found', 404);
+  
+  // Generate HTML Report
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>PCR Report - ${pcr._id}</title>
+      <style>
+        body { font-family: sans-serif; padding: 40px; }
+        h1 { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .section { margin-bottom: 20px; border: 1px solid #ddd; padding: 15px; border-radius: 4px; }
+        .section h2 { margin-top: 0; font-size: 16px; background: #f0f0f0; padding: 5px; }
+        .row { display: flex; margin-bottom: 5px; }
+        .label { font-weight: bold; width: 150px; }
+      </style>
+    </head>
+    <body>
+      <h1>Patient Care Report</h1>
+      <div class="section">
+        <h2>Incident Details</h2>
+        <div class="row"><span class="label">ID:</span> ${pcr.incidentId}</div>
+        <div class="row"><span class="label">Created:</span> ${new Date(pcr.createdAt).toLocaleString()}</div>
+      </div>
+      <div class="section">
+        <h2>Patient Information</h2>
+        <div class="row"><span class="label">Name:</span> ${pcr.patientFirstName || ''} ${pcr.patientLastName || ''}</div>
+        <div class="row"><span class="label">Age/Gender:</span> ${pcr.patientAge || '-'} / ${pcr.patientGender || '-'}</div>
+      </div>
+      <div class="section">
+        <h2>Clinical</h2>
+        <div class="row"><span class="label">Chief Complaint:</span> ${pcr.chiefComplaintText || '-'}</div>
+        <div class="row"><span class="label">History:</span> ${pcr.history || '-'}</div>
+        <div class="row"><span class="label">Allergies:</span> ${pcr.allergies || '-'}</div>
+        <div class="row"><span class="label">Medications:</span> ${pcr.medications || '-'}</div>
+      </div>
+      <div class="section">
+        <h2>Outcome</h2>
+        <div class="row"><span class="label">Disposition:</span> ${pcr.outcome || '-'}</div>
+        <div class="row"><span class="label">Destination:</span> ${pcr.transportDestination || '-'}</div>
+      </div>
+    </body>
+    </html>
+  `;
+  
+  return c.html(html);
+});
+
+// Share PCR (Email simulation)
+app.post('/pcrs/:id/share', async (c) => {
+  const { id } = c.req.param();
+  const { email } = await c.req.json();
+  
+  const pcr = await getPCR(id);
+  if (!pcr) return c.json({ error: 'PCR not found' }, 404);
+  
+  // Log the email "sending"
+  console.log(`[Email Service] Sending PCR Report ${id} to hospital email: ${email}`);
+  
+  return c.json({ success: true, message: 'Report queued for delivery' });
+});
+
+// Settings Routes
+app.get('/settings', async (c) => {
+  const settings = await kv.get('settings') || {
+    darkMode: false,
+    sound: true,
+    notifications: true
+  };
+  return c.json(settings);
+});
+
+app.post('/settings', async (c) => {
+  try {
+    const body = await c.req.json();
+    await kv.set('settings', body);
+    return c.json(body);
+  } catch (e) {
+    return c.json({ error: 'Failed' }, 500);
+  }
+});
+
+// Notifications Routes
+app.get('/notifications', async (c) => {
+  const notifications = await kv.get('notifications') || [];
+  // Sort by date descending
+  return c.json(notifications.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+});
+
+app.post('/notifications', async (c) => {
+  try {
+    const body = await c.req.json();
+    const notifications = (await kv.get('notifications') || []) as any[];
+    const newNotification = {
+      _id: Math.random().toString(36).substr(2, 9),
+      ...body,
+      createdAt: new Date().toISOString()
+    };
+    notifications.push(newNotification);
+    await kv.set('notifications', notifications);
+    return c.json(newNotification);
+  } catch (e) {
+    return c.json({ error: 'Failed' }, 500);
+  }
+});
+
+// User Routes
+app.get('/users/me', async (c) => {
+  // Mock current user for now as we don't have full auth context in this demo environment
+  return c.json({
+    _id: 'u1',
+    name: 'Dispatcher One',
+    email: 'dispatch1@hatzala.org.il',
+    role: 'Dispatcher',
+    branch: 'Beit Shemesh',
+    avatar: ''
+  });
+});
+
 // Generic Handler for other collections
 const collections = [
   'users', 'shifts', 'rosters', 'drugs', 'treatments', 'kpis', 
   'patient-warnings', 'skills', 'connecteam-events'
 ];
 
+const initialUsers = [
+  { _id: 'u1', name: 'Dispatcher One', email: 'dispatch1@hatzala.org.il', role: 'Dispatcher', branch: 'Beit Shemesh' },
+  { _id: 'u2', name: 'Responder Two', email: 'responder2@hatzala.org.il', role: 'Responder', branch: 'Beit Shemesh' },
+  { _id: 'u3', name: 'Admin Three', email: 'admin3@hatzala.org.il', role: 'Admin', branch: 'Jerusalem' },
+];
+
 collections.forEach(collection => {
   app.get(`/${collection}`, async (c) => {
     try {
-      const data = await kv.get(collection);
+      let data = await kv.get(collection);
+      
+      // Auto-seed users if empty
+      if (collection === 'users' && (!data || (Array.isArray(data) && data.length === 0))) {
+         data = initialUsers;
+         await kv.set('users', data);
+      }
+
       return c.json(data || []);
     } catch (e) {
       return c.json([]);

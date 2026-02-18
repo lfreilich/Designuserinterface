@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Bell, Settings, User, Globe } from 'lucide-react';
 import { Button } from './ui/button';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -8,9 +9,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu"
+import { SettingsDialog } from './SettingsDialog';
+import { UserProfileDialog } from './UserProfileDialog';
+import { NotificationsDialog } from './NotificationsDialog';
 
 export function DispatchHeader() {
   const { language, setLanguage } = useLanguage();
+  const [showSettings, setShowSettings] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   return (
     <header className="bg-[#1E4A9C] text-white shadow-lg">
@@ -53,6 +60,8 @@ export function DispatchHeader() {
             variant="ghost" 
             size="icon"
             className="text-white hover:bg-white/10"
+            onClick={() => setShowNotifications(true)}
+            title="Notifications"
           >
             <Bell className="h-5 w-5" />
           </Button>
@@ -60,6 +69,8 @@ export function DispatchHeader() {
             variant="ghost" 
             size="icon"
             className="text-white hover:bg-white/10"
+            onClick={() => setShowSettings(true)}
+            title="Settings"
           >
             <Settings className="h-5 w-5" />
           </Button>
@@ -67,11 +78,17 @@ export function DispatchHeader() {
             variant="ghost" 
             size="icon"
             className="text-white hover:bg-white/10"
+            onClick={() => setShowProfile(true)}
+            title="User Profile"
           >
             <User className="h-5 w-5" />
           </Button>
         </div>
       </div>
+      
+      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
+      <UserProfileDialog open={showProfile} onClose={() => setShowProfile(false)} />
+      <NotificationsDialog open={showNotifications} onClose={() => setShowNotifications(false)} />
     </header>
   );
 }

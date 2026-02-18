@@ -7,9 +7,10 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Clock, User, MapPin, Phone, MessageSquare, Plus, Send } from 'lucide-react';
+import { Clock, User, MapPin, Phone, MessageSquare, Plus, Send, FileText, Share2 } from 'lucide-react';
 import { ActiveCall } from './ActiveCallCard';
 import * as api from '../services/api';
+import { toast } from 'sonner';
 
 interface CallDetailsDialogProps {
   call: ActiveCall | null;
@@ -21,6 +22,7 @@ export function CallDetailsDialog({ call, open, onClose }: CallDetailsDialogProp
   const [notes, setNotes] = useState<api.BackendNote[]>([]);
   const [newNote, setNewNote] = useState('');
   const [loadingNotes, setLoadingNotes] = useState(false);
+  const [pcrId, setPcrId] = useState<string | null>(null);
 
   useEffect(() => {
     if (call && open) {
@@ -29,6 +31,8 @@ export function CallDetailsDialog({ call, open, onClose }: CallDetailsDialogProp
         setNotes(fetchedNotes);
         setLoadingNotes(false);
       });
+      // In a real app we would check if a PCR exists for this call
+      setPcrId(null); 
     }
   }, [call, open]);
 
@@ -39,6 +43,42 @@ export function CallDetailsDialog({ call, open, onClose }: CallDetailsDialogProp
     if (note) {
       setNotes([...notes, note]);
       setNewNote('');
+    }
+  };
+
+  const handleCreatePCR = async () => {
+    if (!call) return;
+    const pcr = await api.createPCR(call.id, {
+      patientFirstName: 'John', // Mock data
+      patientLastName: 'Doe',
+    });
+    
+    if (pcr) {
+      setPcrId(pcr._id);
+      toast.success('PCR Created', {
+        description: `PCR #${pcr._id} has been initialized.`,
+        action: {
+          label: 'View PDF',
+          onClick: () => window.open(api.getPCRPdfUrl(pcr._id), '_blank'),
+        },
+      });
+    } else {
+      toast.error('Failed to create PCR');
+    }
+  };
+
+  const handleShareReport = async () => {
+    if (!pcrId) {
+      toast.error('No PCR created yet');
+      return;
+    }
+    const success = await api.sharePCR(pcrId, 'hospital@example.com');
+    if (success) {
+      toast.success('Report Shared', {
+        description: 'PCR Report has been emailed to the hospital.',
+      });
+    } else {
+      toast.error('Failed to share report');
     }
   };
 
@@ -155,7 +195,19 @@ export function CallDetailsDialog({ call, open, onClose }: CallDetailsDialogProp
           </TabsContent>
         </Tabs>
         
-        <DialogFooter className="mt-4">
+        <DialogFooter className="mt-4 flex justify-between w-full">
+           <div className="flex gap-2">
+             <Button variant="outline" onClick={handleCreatePCR} disabled={!!pcrId}>
+               <FileText className="h-4 w-4 mr-2" />
+               {pcrId ? 'PCR Exists' : 'Create PCR'}
+             </Button>
+             {pcrId && (
+               <Button variant="outline" onClick={handleShareReport}>
+                 <Share2 className="h-4 w-4 mr-2" />
+                 Share Report
+               </Button>
+             )}
+           </div>
            <Button variant="outline" onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>
