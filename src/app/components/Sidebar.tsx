@@ -1,4 +1,4 @@
-import { LayoutDashboard, Phone, Signal, Map, History, Users, FileText } from 'lucide-react';
+import { LayoutDashboard, Phone, Signal, Map, History, Users, FileText, Settings } from 'lucide-react';
 import { Button } from './ui/button';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -18,6 +18,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     { id: 'personnel', icon: Users, label: 'Personnel', section: 'management' },
     { id: 'reports', icon: FileText, label: 'Reports', section: 'management' },
     { id: 'call_history', icon: History, label: 'Call History', section: 'management' },
+    { id: 'configuration', icon: Settings, label: 'Configuration', section: 'management' },
   ];
 
   return (

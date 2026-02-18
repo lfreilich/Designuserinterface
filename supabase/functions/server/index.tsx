@@ -2,7 +2,7 @@ import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import * as kv from "./kv_store.tsx";
-import { createClient } from "jsr:@supabase/supabase-js@2.49.8";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const app = new Hono();
 
@@ -362,6 +362,27 @@ app.get(`${BASE_PATH}/users/me`, (c) => {
 
 app.get(`${BASE_PATH}/notifications`, async (c) => {
     return c.json([]);
+});
+
+// --- Config Routes ---
+
+app.get(`${BASE_PATH}/config`, async (c) => {
+  try {
+    const config = await kv.get('system_config');
+    return c.json(config || {});
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+app.post(`${BASE_PATH}/config`, async (c) => {
+  try {
+    const config = await c.req.json();
+    await kv.set('system_config', config);
+    return c.json({ success: true, config });
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
 });
 
 Deno.serve(app.fetch);

@@ -18,6 +18,7 @@ import { Toaster } from './components/ui/sonner';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { CallDetailsDialog } from './components/CallDetailsDialog';
+import { SettingsPage } from './components/SettingsPage';
 import * as api from './services/api';
 
 export default function App() {
@@ -396,6 +397,10 @@ function MainApp() {
                    <p className="text-gray-500 italic text-center">History archive access requires admin privileges.</p>
                 </div>
              </div>
+          )}
+
+          {currentPage === 'configuration' && (
+             <SettingsPage />
           )}
 
         </main>

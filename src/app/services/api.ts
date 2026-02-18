@@ -104,6 +104,25 @@ export interface BackendUser {
   avatar?: string;
 }
 
+export interface BackendConfig {
+  general: {
+    centerName: string;
+    defaultLanguage: string;
+    theme: string;
+    refreshRate: number;
+  };
+  apiKeys: {
+    openai: string;
+    googleMaps: string;
+    twilio: string;
+  };
+  dispatch: {
+    autoDispatch: boolean;
+    priorityThreshold: string;
+    maxUnitsPerCall: number;
+  };
+}
+
 // Notifications
 export async function getNotifications(): Promise<BackendNotification[]> {
   try {
@@ -182,7 +201,7 @@ export async function getIncidents(): Promise<BackendIncident[]> {
     if (!res.ok) throw new Error('Failed to fetch incidents');
     return await res.json();
   } catch (error) {
-    console.error(error);
+    console.error('getIncidents failed', error);
     return [];
   }
 }
@@ -198,7 +217,7 @@ export async function getResources(): Promise<BackendResource[]> {
     if (!res.ok) throw new Error('Failed to fetch resources');
     return await res.json();
   } catch (error) {
-    console.error(error);
+    console.error('getResources failed', error);
     return [];
   }
 }
@@ -402,4 +421,31 @@ export async function sharePCR(pcrId: string, email: string): Promise<boolean> {
 
 export function getPCRPdfUrl(pcrId: string): string {
   return `${API_BASE}/pcrs/${pcrId}/pdf`;
+}
+
+// Config
+export async function getConfig(): Promise<BackendConfig | null> {
+  try {
+    const res = await fetch(`${API_BASE}/config`, {
+      headers: { 'Authorization': `Bearer ${publicAnonKey}` },
+    });
+    return await res.json();
+  } catch (error) { 
+      console.error('getConfig failed', error);
+      return null; 
+  }
+}
+
+export async function saveConfig(config: BackendConfig): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/config`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${publicAnonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config),
+    });
+    return res.ok;
+  } catch (error) { return false; }
 }
