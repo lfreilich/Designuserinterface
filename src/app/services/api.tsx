@@ -1,10 +1,12 @@
 import { projectId, publicAnonKey } from '/utils/supabase/info';
+import { toast } from 'sonner';
 
 const BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-2750c780`;
 
 export interface BackendIncident {
   _id: string;
-  caseNumber: string;
+  id?: string;
+  caseNumber?: string;
   status: 'open' | 'dispatched' | 'responding' | 'on scene' | 'transporting' | 'at hospital' | 'closed' | 'cancelled';
   priority: number;
   chiefComplaintText: string;
@@ -13,20 +15,30 @@ export interface BackendIncident {
   callerPhone: string;
   timeCallReceived: string;
   unitsAssigned: string[];
-  callType: string;
+  callType?: string;
+  location?: { coordinates: number[] };
   pcrId?: string;
   [key: string]: any;
 }
 
 export interface Resource {
   _id: string;
+  id?: string;
   name: string;
   type: 'BLS' | 'ALS' | 'RESPONSE' | 'COMMAND';
-  callSign: string;
+  callSign?: string;
   status: 'available' | 'dispatched' | 'responding' | 'on scene' | 'transporting' | 'at hospital' | 'unavailable' | 'off duty';
   location?: { type: 'Point', coordinates: number[] };
   currentIncident?: string;
   crewMembers: string[];
+}
+
+export interface BackendUser {
+  _id: string;
+  name: string;
+  role: string;
+  branch?: string;
+  email?: string;
 }
 
 export interface IncidentPCR {
@@ -50,68 +62,139 @@ export interface IncidentPCR {
   createdAt: string;
 }
 
+export interface BackendConfig {
+  general: {
+    centerName: string;
+    defaultLanguage: string;
+    theme: string;
+    refreshRate: number;
+  };
+  apiKeys: {
+    openai: string;
+    googleMaps: string;
+    resend: string;
+  };
+  dispatch: {
+    autoDispatch: boolean;
+    priorityThreshold: string;
+    maxUnitsPerCall: number;
+  };
+  walkieFleet: {
+    serverUrl: string;
+    username: string;
+    password?: string;
+    enabled: boolean;
+  };
+  freePBX: {
+    serverUrl: string;
+    extension: string;
+    secret?: string;
+    enabled: boolean;
+  };
+  imap: {
+    host: string;
+    port: number;
+    user: string;
+    password?: string;
+    tls: boolean;
+    enabled: boolean;
+  };
+}
+
 const headers = {
   'Content-Type': 'application/json',
   'Authorization': `Bearer ${publicAnonKey}`
 };
 
+// Generic fetch wrapper with error handling
+async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 2) {
+  try {
+    const res = await fetch(url, options);
+    if (!res.ok) {
+       // Try to parse error message
+       let errMsg = res.statusText;
+       try {
+          const json = await res.json();
+          if (json.error) errMsg = json.error;
+          else if (json.message) errMsg = json.message;
+       } catch {}
+       throw new Error(`Request failed (${res.status}): ${errMsg}`);
+    }
+    return res.json();
+  } catch (err) {
+    if (retries > 0) {
+      console.warn(`Retrying fetch to ${url}... (${retries} left)`);
+      await new Promise(r => setTimeout(r, 1000));
+      return fetchWithRetry(url, options, retries - 1);
+    }
+    throw err;
+  }
+}
+
 export async function getIncidents(): Promise<BackendIncident[]> {
-  const res = await fetch(`${BASE_URL}/incidents`, { headers });
-  if (!res.ok) throw new Error('Failed to fetch incidents');
-  return res.json();
+  try {
+    return await fetchWithRetry(`${BASE_URL}/incidents`, { headers });
+  } catch (error) {
+    console.error("getIncidents failed", error);
+    // Return empty array to prevent app crash, but log error
+    toast.error("Failed to load incidents. Check network connection.");
+    return [];
+  }
 }
 
 export async function createIncident(data: any): Promise<BackendIncident> {
-  const res = await fetch(`${BASE_URL}/incidents`, {
+  return await fetchWithRetry(`${BASE_URL}/incidents`, {
     method: 'POST',
     headers,
     body: JSON.stringify(data)
   });
-  if (!res.ok) throw new Error('Failed to create incident');
-  return res.json();
 }
 
 export async function updateIncident(id: string, data: any): Promise<BackendIncident> {
-  const res = await fetch(`${BASE_URL}/incidents/${id}`, {
+  return await fetchWithRetry(`${BASE_URL}/incidents/${id}`, {
     method: 'PUT',
     headers,
     body: JSON.stringify(data)
   });
-  if (!res.ok) throw new Error('Failed to update incident');
-  return res.json();
 }
 
 export async function getResources(): Promise<Resource[]> {
-  const res = await fetch(`${BASE_URL}/resources`, { headers });
-  if (!res.ok) throw new Error('Failed to fetch resources');
-  return res.json();
+  try {
+    return await fetchWithRetry(`${BASE_URL}/resources`, { headers });
+  } catch (error) {
+     console.error("getResources failed", error);
+     return [];
+  }
 }
 
-export async function dispatch(incidentId: string, unitId: string) {
-  const res = await fetch(`${BASE_URL}/dispatch`, {
+export async function getUsers(): Promise<BackendUser[]> {
+  try {
+    return await fetchWithRetry(`${BASE_URL}/users`, { headers });
+  } catch (error) {
+     console.error("getUsers failed", error);
+     return [];
+  }
+}
+
+export async function dispatchUnit(incidentId: string, unitId: string) {
+  return await fetchWithRetry(`${BASE_URL}/dispatch`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ incidentId, unitId })
   });
-  if (!res.ok) throw new Error('Failed to dispatch unit');
-  return res.json();
 }
 
 export async function createPCR(data: any): Promise<IncidentPCR> {
-  const res = await fetch(`${BASE_URL}/pcrs`, {
+  return await fetchWithRetry(`${BASE_URL}/pcrs`, {
     method: 'POST',
     headers,
     body: JSON.stringify(data)
   });
-  if (!res.ok) throw new Error('Failed to create PCR');
-  return res.json();
 }
 
 export async function getPCR(id: string): Promise<{ pcr: IncidentPCR | null, observations: any[], treatments: any[] }> {
   try {
-    const res = await fetch(`${BASE_URL}/pcrs/${id}`, { headers });
-    if (!res.ok) return { pcr: null, observations: [], treatments: [] }; 
-    const data = await res.json();
+    const data = await fetchWithRetry(`${BASE_URL}/pcrs/${id}`, { headers });
     return data || { pcr: null, observations: [], treatments: [] };
   } catch (error) {
     console.error("Error fetching PCR:", error);
@@ -120,21 +203,102 @@ export async function getPCR(id: string): Promise<{ pcr: IncidentPCR | null, obs
 }
 
 export async function updatePCR(id: string, data: any): Promise<IncidentPCR> {
-  const res = await fetch(`${BASE_URL}/pcrs/${id}`, {
+  return await fetchWithRetry(`${BASE_URL}/pcrs/${id}`, {
     method: 'PUT',
     headers,
     body: JSON.stringify(data)
   });
-  if (!res.ok) throw new Error('Failed to update PCR');
-  return res.json();
 }
 
 export async function sharePCR(id: string, email: string) {
-  const res = await fetch(`${BASE_URL}/pcrs/${id}/share`, {
+  return await fetchWithRetry(`${BASE_URL}/pcrs/${id}/share`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ email })
   });
-  if (!res.ok) throw new Error('Failed to share PCR');
-  return res.json();
+}
+
+export async function getConfig(): Promise<BackendConfig> {
+  try {
+    const config = await fetchWithRetry(`${BASE_URL}/config`, { headers });
+    // Ensure nested objects exist to prevent crashes
+    return {
+      general: config.general || {},
+      apiKeys: config.apiKeys || {},
+      dispatch: config.dispatch || {},
+      walkieFleet: config.walkieFleet || {},
+      freePBX: config.freePBX || {},
+      imap: config.imap || {}
+    } as BackendConfig;
+  } catch (error) {
+    console.error("getConfig failed", error);
+    return {} as BackendConfig;
+  }
+}
+
+export async function saveConfig(config: BackendConfig) {
+  return await fetchWithRetry(`${BASE_URL}/config`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(config)
+  });
+}
+
+// Test Functions
+
+export async function testImapConnection(config: any) {
+  try {
+    const res = await fetch(`${BASE_URL}/integrations/imap/test`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(config)
+    });
+    return await res.json();
+  } catch (e) {
+      return { success: false, message: e.message };
+  }
+}
+
+export async function testWalkieFleet(config: any) {
+  try {
+    const res = await fetch(`${BASE_URL}/integrations/walkiefleet/test`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(config)
+    });
+    return await res.json();
+  } catch (e) {
+      return { success: false, message: e.message };
+  }
+}
+
+export async function testOpenAI(key: string) {
+    // Client-side simple check or server proxy
+    if (!key) return { success: false, message: "Missing Key" };
+    try {
+        const res = await fetch(`${BASE_URL}/integrations/openai/test`, {
+             method: 'POST', headers, body: JSON.stringify({ key })
+        });
+        return await res.json();
+    } catch(e) { return { success: false, message: e.message }; }
+}
+
+export async function testMaps(key: string) {
+    if (!key) return { success: false, message: "Missing Key" };
+    try {
+        const res = await fetch(`${BASE_URL}/integrations/maps/test`, {
+             method: 'POST', headers, body: JSON.stringify({ key })
+        });
+        return await res.json();
+    } catch(e) { return { success: false, message: e.message }; }
+}
+
+export async function testResend(key: string) {
+    if (!key) return { success: false, message: "Missing Key" };
+    try {
+        const res = await fetch(`${BASE_URL}/integrations/resend/test`, {
+             method: 'POST', headers, body: JSON.stringify({ key })
+        });
+        return await res.json();
+    } catch(e) { return { success: false, message: e.message }; }
 }

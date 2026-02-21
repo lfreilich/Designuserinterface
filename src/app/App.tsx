@@ -19,13 +19,34 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { CallDetailsDialog } from './components/CallDetailsDialog';
 import { SettingsPage } from './components/SettingsPage';
+import { FreePBXSoftphone } from './components/FreePBXSoftphone';
 import * as api from './services/api';
 
+import { GoogleMapsProvider } from './contexts/GoogleMapsContext';
+
 export default function App() {
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  useEffect(() => {
+    api.getConfig().then(config => {
+      if (config?.apiKeys?.googleMaps) {
+        setApiKey(config.apiKeys.googleMaps);
+      }
+      setConfigLoaded(true);
+    });
+  }, []);
+
+  if (!configLoaded) {
+    return <div className="flex items-center justify-center h-screen bg-gray-50 text-gray-500">Loading configuration...</div>;
+  }
+
   return (
     <LanguageProvider>
       <DndProvider backend={HTML5Backend}>
-        <MainApp />
+        <GoogleMapsProvider apiKey={apiKey} configLoaded={configLoaded}>
+          <MainApp />
+        </GoogleMapsProvider>
       </DndProvider>
     </LanguageProvider>
   );
@@ -68,7 +89,8 @@ function MainApp() {
           return u ? u.name : uid;
         }),
         status: inc.status === 'open' ? 'pending' : inc.status === 'dispatched' ? 'dispatched' : 'active' as any,
-        eta: '5 min' // Mock ETA
+        eta: '5 min', // Mock ETA
+        location: inc.location?.coordinates ? { lat: inc.location.coordinates[1], lng: inc.location.coordinates[0] } : undefined
       }));
 
       const mappedUnits: Unit[] = resources.map(res => ({
@@ -76,6 +98,7 @@ function MainApp() {
         name: res.name,
         status: res.status as any,
         location: res.location ? `${res.location.coordinates[1]}, ${res.location.coordinates[0]}` : 'Unknown',
+        coordinates: res.location?.coordinates ? { lat: res.location.coordinates[1], lng: res.location.coordinates[0] } : undefined,
         members: res.crewMembers || []
       }));
 
@@ -148,7 +171,8 @@ function MainApp() {
         time: new Date(incident.timeCallReceived).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         units: incident.unitsAssigned || [],
         status: incident.status === 'open' ? 'pending' : incident.status === 'dispatched' ? 'dispatched' : 'active' as any,
-        eta: '' 
+        eta: '',
+        location: incident.location?.coordinates ? { lat: incident.location.coordinates[1], lng: incident.location.coordinates[0] } : undefined
     };
     
     setCalls(prev => {
@@ -414,6 +438,7 @@ function MainApp() {
         units={units}
       />
 
+      <FreePBXSoftphone />
       <Toaster />
     </div>
   );

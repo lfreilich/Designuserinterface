@@ -8,13 +8,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { toast } from 'sonner';
-import { Save, Loader2, Shield, Map as MapIcon, Globe, MessageSquare } from 'lucide-react';
+import { Save, Loader2, Shield, Map as MapIcon, Globe, MessageSquare, Mail, Radio, Phone, Inbox } from 'lucide-react';
 import * as api from '../services/api';
 
 export function SettingsPage() {
   const { t, language } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testingImap, setTestingImap] = useState(false);
+  const [testingOpenAI, setTestingOpenAI] = useState(false);
+  const [testingMaps, setTestingMaps] = useState(false);
+  const [testingResend, setTestingResend] = useState(false);
+  const [testingWalkieFleet, setTestingWalkieFleet] = useState(false);
+  const [testingFreePBX, setTestingFreePBX] = useState(false);
   
   const [config, setConfig] = useState({
     general: {
@@ -26,12 +32,32 @@ export function SettingsPage() {
     apiKeys: {
       openai: '',
       googleMaps: '',
-      twilio: ''
+      resend: ''
     },
     dispatch: {
       autoDispatch: false,
       priorityThreshold: 'critical',
       maxUnitsPerCall: 3
+    },
+    walkieFleet: {
+      serverUrl: '',
+      username: '',
+      password: '',
+      enabled: false
+    },
+    freePBX: {
+      serverUrl: '',
+      extension: '',
+      secret: '',
+      enabled: false
+    },
+    imap: {
+      host: '',
+      port: 993,
+      user: '',
+      password: '',
+      tls: true,
+      enabled: false
     }
   });
 
@@ -50,7 +76,10 @@ export function SettingsPage() {
           ...data,
           general: { ...prev.general, ...data.general },
           apiKeys: { ...prev.apiKeys, ...data.apiKeys },
-          dispatch: { ...prev.dispatch, ...data.dispatch }
+          dispatch: { ...prev.dispatch, ...data.dispatch },
+          walkieFleet: { ...prev.walkieFleet, ...data.walkieFleet },
+          freePBX: { ...prev.freePBX, ...data.freePBX },
+          imap: { ...prev.imap, ...data.imap }
         }));
       }
     } catch (error) {
@@ -71,6 +100,194 @@ export function SettingsPage() {
       toast.error('Failed to save configuration');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestImap = async () => {
+    setTestingImap(true);
+    try {
+      const result = await api.testImapConnection(config.imap);
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      toast.error('Connection test failed');
+    } finally {
+      setTestingImap(false);
+    }
+  };
+
+  const handleTestOpenAI = async () => {
+    setTestingOpenAI(true);
+    try {
+      const result = await api.testOpenAI(config.apiKeys.openai);
+      if (result.success) toast.success(result.message); else toast.error(result.message);
+    } catch { toast.error('Test failed'); } finally { setTestingOpenAI(false); }
+  };
+
+  const handleTestMaps = async () => {
+    setTestingMaps(true);
+    try {
+      const result = await api.testMaps(config.apiKeys.googleMaps);
+      if (result.success) toast.success(result.message); else toast.error(result.message);
+    } catch { toast.error('Test failed'); } finally { setTestingMaps(false); }
+  };
+
+  const handleTestResend = async () => {
+    setTestingResend(true);
+    try {
+      const result = await api.testResend(config.apiKeys.resend);
+      if (result.success) toast.success(result.message); else toast.error(result.message);
+    } catch { toast.error('Test failed'); } finally { setTestingResend(false); }
+  };
+
+  const handleTestWalkieFleet = async () => {
+    setTestingWalkieFleet(true);
+    try {
+      const result = await api.testWalkieFleet(config.walkieFleet);
+      if (result.success) toast.success(result.message); else toast.error(result.message);
+    } catch { toast.error('Test failed'); } finally { setTestingWalkieFleet(false); }
+  };
+
+  const handleTestFreePBX = async () => {
+    setTestingFreePBX(true);
+    try {
+      const { serverUrl, extension, secret } = config.freePBX;
+      
+      if (!serverUrl || !extension || !secret) {
+        toast.error('Missing FreePBX configuration');
+        return;
+      }
+
+      // Check for UserAgent availability
+      if (typeof window === 'undefined') {
+        toast.error('Test must run in browser');
+        return;
+      }
+
+      // Pre-check WebSocket connectivity with a native WebSocket to diagnose certificate issues
+      try {
+        console.log(`Pre-checking WebSocket connection to ${serverUrl}`);
+        await new Promise<void>((resolve, reject) => {
+            const socket = new WebSocket(serverUrl, 'sip'); // Try 'sip' subprotocol as most PBX support it
+            
+            const timer = setTimeout(() => {
+                socket.close();
+                reject(new Error('Timeout connecting to WebSocket'));
+            }, 5000);
+
+            socket.onopen = () => {
+                clearTimeout(timer);
+                socket.close();
+                resolve();
+            };
+
+            socket.onerror = (e) => {
+                // WebSocket errors are generic in JS, rely on onclose code
+                // console.warn("WebSocket pre-check error", e);
+            };
+
+            socket.onclose = (e) => {
+                clearTimeout(timer);
+                if (e.code === 1006) {
+                    reject(new Error('WebSocket closed abnormally (Code 1006). This usually indicates a certificate error.'));
+                } else if (e.code !== 1000 && e.code !== 1005) { // 1000/1005 are normal closures
+                    reject(new Error(`WebSocket closed with code ${e.code}`));
+                }
+            };
+        });
+        toast.success('Server reachable via WebSocket');
+      } catch (wsError) {
+          // console.error("WebSocket pre-check failed:", wsError);
+          const isCertError = wsError.message?.includes('1006') || wsError.message?.includes('certificate');
+          
+          if (isCertError) {
+              const checkUrl = serverUrl.replace('wss://', 'https://').replace('ws://', 'http://');
+              toast.error(
+                  <div className="flex flex-col gap-2">
+                      <span className="font-semibold">Connection Failed (Certificate Issue)</span>
+                      <span className="text-xs">Your browser blocked the connection to {serverUrl}. Open the URL below in a new tab and accept the certificate, then try again.</span>
+                      <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          className="w-full mt-1"
+                          onClick={() => window.open(checkUrl, '_blank')}
+                      >
+                          Check Certificate
+                      </Button>
+                  </div>,
+                  { duration: 10000 }
+              );
+              return; // Stop execution here
+          } else {
+             console.error("WebSocket pre-check failed:", wsError);
+             toast.error(`Connection failed: ${wsError.message}`);
+             return; // Stop execution here
+          }
+      }
+      
+      const sip = await import('sip.js');
+      const { UserAgent } = sip;
+
+      // Parse domain from WSS URL or assume from input
+      // WSS: wss://bandtelecom.org:6443/sipws
+      // Domain likely: bandtelecom.org
+      let domain = serverUrl.replace('wss://', '').replace('ws://', '').split('/')[0].split(':')[0];
+      
+      // If extension includes domain (e.g. sip:999@bandtelecom.org) use that
+      let user = extension;
+      if (extension.includes('@')) {
+        const parts = extension.replace('sip:', '').split('@');
+        user = parts[0];
+        domain = parts[1];
+      }
+
+      const uriStr = `sip:${user}@${domain}`;
+      const uri = UserAgent.makeURI(uriStr);
+      
+      if (!uri) {
+        toast.error('Invalid SIP URI construction');
+        return;
+      }
+
+      console.log(`Testing SIP connection to ${serverUrl} as ${uriStr}`);
+
+      const userAgent = new UserAgent({
+        uri,
+        transportOptions: {
+          server: serverUrl,
+          connectionTimeout: 5,
+        },
+        authorizationUsername: user,
+        authorizationPassword: secret,
+        register: false, // We just want to test transport connectivity first
+        logLevel: 'error'
+      });
+      
+      try {
+          // Pre-check succeeded, now try SIP registration
+          await userAgent.start(); // This attempts to connect transport
+          
+          if (userAgent.transport.isConnected()) {
+              toast.success(`SIP Transport Connected (${domain})`);
+              await userAgent.stop();
+          } else {
+              throw new Error('Could not establish transport connection');
+          }
+      } catch (wsError) {
+          console.error("SIP Transport failed:", wsError);
+          // We already pre-checked for certificate issues, so this is likely a SIP protocol issue or timeout
+          toast.error(`SIP Connection failed: ${wsError.message}`);
+          try { await userAgent.stop(); } catch {}
+      }
+
+    } catch (error) {
+      console.error('SIP Test Error:', error);
+      toast.error('Connection failed: ' + (error.message || 'Unknown error'));
+    } finally {
+      setTestingFreePBX(false);
     }
   };
 
@@ -187,6 +404,16 @@ export function SettingsPage() {
                     onChange={(e) => handleChange('apiKeys', 'openai', e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">Used for "Silent Listener" transcription and intent analysis.</p>
+                  <Button 
+                    onClick={handleTestOpenAI} 
+                    disabled={testingOpenAI || !config.apiKeys.openai}
+                    variant="secondary"
+                    size="sm"
+                    className="mt-2"
+                  >
+                    {testingOpenAI ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
+                    Test OpenAI Key
+                  </Button>
                 </div>
               </div>
               
@@ -205,23 +432,258 @@ export function SettingsPage() {
                     onChange={(e) => handleChange('apiKeys', 'googleMaps', e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">Required for geocoding, routing, and map tiles.</p>
+                  <Button 
+                    onClick={handleTestMaps} 
+                    disabled={testingMaps || !config.apiKeys.googleMaps}
+                    variant="secondary"
+                    size="sm"
+                    className="mt-2"
+                  >
+                    {testingMaps ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MapIcon className="h-4 w-4 mr-2" />}
+                    Test Maps Key
+                  </Button>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center gap-2 mb-2">
-                  <Shield className="h-5 w-5 text-purple-500" />
-                  <h3 className="font-medium">SMS Gateway (Twilio)</h3>
+                  <Mail className="h-5 w-5 text-purple-500" />
+                  <h3 className="font-medium">Email Gateway (Resend)</h3>
                 </div>
                 <div className="grid gap-2 pl-7">
-                  <Label htmlFor="twilio_key">Auth Token / API Key</Label>
+                  <Label htmlFor="resend_key">API Key</Label>
                   <Input 
-                    id="twilio_key" 
+                    id="resend_key" 
                     type="password"
-                    placeholder="Enter token" 
-                    value={config.apiKeys.twilio}
-                    onChange={(e) => handleChange('apiKeys', 'twilio', e.target.value)}
+                    placeholder="re_..." 
+                    value={config.apiKeys.resend}
+                    onChange={(e) => handleChange('apiKeys', 'resend', e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">Used for sending verification codes and system alerts via email.</p>
+                  <Button 
+                    onClick={handleTestResend} 
+                    disabled={testingResend || !config.apiKeys.resend}
+                    variant="secondary"
+                    size="sm"
+                    className="mt-2"
+                  >
+                    {testingResend ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
+                    Test Resend Key
+                  </Button>
+                </div>
+              </div>
+
+              {/* IMAP Integration */}
+              <div className="space-y-4 pt-6 border-t">
+                <div className="flex items-center gap-2 mb-2">
+                  <Inbox className="h-5 w-5 text-teal-500" />
+                  <h3 className="font-medium">Email Monitoring (IMAP)</h3>
+                </div>
+                <div className="grid gap-4 pl-7">
+                  <div className="flex items-center space-x-2">
+                    <Switch 
+                      id="imap_enabled" 
+                      checked={config.imap?.enabled || false}
+                      onCheckedChange={(c) => handleChange('imap', 'enabled', c)}
+                    />
+                    <Label htmlFor="imap_enabled">Enable Email Monitoring</Label>
+                  </div>
+
+                  {config.imap?.enabled && (
+                    <div className="grid gap-3 p-4 bg-muted/50 rounded-lg">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="imap_host">IMAP Host</Label>
+                          <Input 
+                            id="imap_host" 
+                            placeholder="imap.gmail.com" 
+                            value={config.imap.host || ''}
+                            onChange={(e) => handleChange('imap', 'host', e.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="imap_port">Port</Label>
+                          <Input 
+                            id="imap_port" 
+                            type="number"
+                            placeholder="993"
+                            value={config.imap.port || 993}
+                            onChange={(e) => handleChange('imap', 'port', parseInt(e.target.value))}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="imap_user">Username</Label>
+                          <Input 
+                            id="imap_user" 
+                            placeholder="dispatcher@domain.com" 
+                            value={config.imap.user || ''}
+                            onChange={(e) => handleChange('imap', 'user', e.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="imap_pass">Password</Label>
+                          <Input 
+                            id="imap_pass" 
+                            type="password"
+                            placeholder="••••••"
+                            value={config.imap.password || ''}
+                            onChange={(e) => handleChange('imap', 'password', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 pt-1">
+                        <Switch 
+                          id="imap_tls" 
+                          checked={config.imap.tls !== false} // Default to true
+                          onCheckedChange={(c) => handleChange('imap', 'tls', c)}
+                        />
+                        <Label htmlFor="imap_tls" className="text-sm font-normal">Use TLS/SSL</Label>
+                      </div>
+                      
+                      <Button 
+                        onClick={handleTestImap} 
+                        disabled={testingImap || !config.imap.host || !config.imap.user}
+                        variant="secondary"
+                        size="sm"
+                        className="mt-2 w-full sm:w-auto"
+                      >
+                        {testingImap ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Inbox className="h-4 w-4 mr-2" />}
+                        Test IMAP Connection
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* WalkieFleet Integration */}
+              <div className="space-y-4 pt-6 border-t">
+                <div className="flex items-center gap-2 mb-2">
+                  <Radio className="h-5 w-5 text-orange-500" />
+                  <h3 className="font-medium">Radio Integration (WalkieFleet)</h3>
+                </div>
+                <div className="grid gap-4 pl-7">
+                  <div className="flex items-center space-x-2">
+                    <Switch 
+                      id="wf_enabled" 
+                      checked={config.walkieFleet?.enabled || false}
+                      onCheckedChange={(c) => handleChange('walkieFleet', 'enabled', c)}
+                    />
+                    <Label htmlFor="wf_enabled">Enable WalkieFleet Integration</Label>
+                  </div>
+                  
+                  {config.walkieFleet?.enabled && (
+                    <div className="grid gap-3 p-4 bg-muted/50 rounded-lg">
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="wf_url">Server URL</Label>
+                        <Input 
+                          id="wf_url" 
+                          placeholder="https://server.walkiefleet.com" 
+                          value={config.walkieFleet.serverUrl || ''}
+                          onChange={(e) => handleChange('walkieFleet', 'serverUrl', e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">Enter the base URL of your WalkieFleet server (must start with http:// or https://).</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="wf_user">Username</Label>
+                          <Input 
+                            id="wf_user" 
+                            placeholder="dispatcher_01" 
+                            value={config.walkieFleet.username || ''}
+                            onChange={(e) => handleChange('walkieFleet', 'username', e.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="wf_pass">Password</Label>
+                          <Input 
+                            id="wf_pass" 
+                            type="password"
+                            placeholder="••••••"
+                            value={config.walkieFleet.password || ''}
+                            onChange={(e) => handleChange('walkieFleet', 'password', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={handleTestWalkieFleet} 
+                        disabled={testingWalkieFleet || !config.walkieFleet.serverUrl || !config.walkieFleet.username}
+                        variant="secondary"
+                        size="sm"
+                        className="mt-2 w-full sm:w-auto"
+                      >
+                        {testingWalkieFleet ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Radio className="h-4 w-4 mr-2" />}
+                        Test WalkieFleet Connection
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* FreePBX Integration */}
+              <div className="space-y-4 pt-6 border-t">
+                <div className="flex items-center gap-2 mb-2">
+                  <Phone className="h-5 w-5 text-indigo-500" />
+                  <h3 className="font-medium">Telephony (FreePBX)</h3>
+                </div>
+                <div className="grid gap-4 pl-7">
+                  <div className="flex items-center space-x-2">
+                    <Switch 
+                      id="fpbx_enabled" 
+                      checked={config.freePBX?.enabled || false}
+                      onCheckedChange={(c) => handleChange('freePBX', 'enabled', c)}
+                    />
+                    <Label htmlFor="fpbx_enabled">Enable FreePBX Integration</Label>
+                  </div>
+
+                  {config.freePBX?.enabled && (
+                    <div className="grid gap-3 p-4 bg-muted/50 rounded-lg">
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="fpbx_url">Asterisk WSS URL</Label>
+                        <Input 
+                          id="fpbx_url" 
+                          placeholder="wss://bandtelecom.org:6443/ws" 
+                          value={config.freePBX.serverUrl || ''}
+                          onChange={(e) => handleChange('freePBX', 'serverUrl', e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="fpbx_ext">SIP User / Extension</Label>
+                          <Input 
+                            id="fpbx_ext" 
+                            placeholder="999" 
+                            value={config.freePBX.extension || ''}
+                            onChange={(e) => handleChange('freePBX', 'extension', e.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="fpbx_sec">Password / Secret</Label>
+                          <Input 
+                            id="fpbx_sec" 
+                            type="password"
+                            placeholder="Hatzbs..." 
+                            value={config.freePBX.secret || ''}
+                            onChange={(e) => handleChange('freePBX', 'secret', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950 p-2 rounded mt-2">
+                          <p><strong>Note:</strong> If you see "WebSocket closed abnormally (Code 1006)", it means your browser does not trust the certificate. Click "Check Certificate" in the error toast.</p>
+                      </div>
+                      <Button 
+                        onClick={handleTestFreePBX} 
+                        disabled={testingFreePBX || !config.freePBX.serverUrl}
+                        variant="secondary"
+                        size="sm"
+                        className="mt-2 w-full sm:w-auto"
+                      >
+                        {testingFreePBX ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Phone className="h-4 w-4 mr-2" />}
+                        Test FreePBX Connection
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>

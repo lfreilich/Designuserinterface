@@ -114,12 +114,32 @@ export interface BackendConfig {
   apiKeys: {
     openai: string;
     googleMaps: string;
-    twilio: string;
+    resend: string;
   };
   dispatch: {
     autoDispatch: boolean;
     priorityThreshold: string;
     maxUnitsPerCall: number;
+  };
+  walkieFleet: {
+    serverUrl: string;
+    username: string;
+    password: string;
+    enabled: boolean;
+  };
+  freePBX: {
+    serverUrl: string;
+    extension: string;
+    secret: string;
+    enabled: boolean;
+  };
+  imap: {
+    host: string;
+    port: number;
+    user: string;
+    password: string;
+    tls: boolean;
+    enabled: boolean;
   };
 }
 
@@ -448,4 +468,75 @@ export async function saveConfig(config: BackendConfig): Promise<boolean> {
     });
     return res.ok;
   } catch (error) { return false; }
+}
+
+export async function testImapConnection(config: BackendConfig['imap']): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/integrations/imap/test`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${publicAnonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config),
+    });
+    return await res.json();
+  } catch (error) {
+    return { success: false, message: 'Connection failed: ' + error.message };
+  }
+}
+
+export async function testOpenAI(apiKey: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/integrations/openai/test`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
+    });
+    return await res.json();
+  } catch (error) { return { success: false, message: 'Test failed' }; }
+}
+
+export async function testMaps(apiKey: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/integrations/maps/test`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
+    });
+    return await res.json();
+  } catch (error) { return { success: false, message: 'Test failed' }; }
+}
+
+export async function testResend(apiKey: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/integrations/resend/test`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
+    });
+    return await res.json();
+  } catch (error) { return { success: false, message: 'Test failed' }; }
+}
+
+export async function testWalkieFleet(config: BackendConfig['walkieFleet']): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/integrations/walkiefleet/test`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    return await res.json();
+  } catch (error) { return { success: false, message: 'Test failed' }; }
+}
+
+export async function testFreePBX(config: BackendConfig['freePBX']): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/integrations/freepbx/test`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    return await res.json();
+  } catch (error) { return { success: false, message: 'Test failed' }; }
 }
